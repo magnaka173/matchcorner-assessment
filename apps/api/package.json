@@ -7,10 +7,13 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test $(find src -name '*.test.ts' | sort)"
+    "test": "tsx --test $(find src -name '*.test.ts' | sort)",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
     "@matchcorner/contracts": "*",
+    "@prisma/client": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "express": "^5.0.0",

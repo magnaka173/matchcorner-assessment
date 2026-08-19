@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AppError } from "../errors/app-error.js";
 import type { BookingOperator } from "../operators/booking-operator.js";
+import { InMemoryAuditRepository } from "../repositories/memory-audit.repository.js";
 import { BookingService } from "./booking.service.js";
 
 const SOURCE_CODE = "BWSOURCE01";
@@ -82,6 +83,10 @@ function recordingOperator(options: {
   };
 }
 
+function bookingService(operator: BookingOperator, audits = new InMemoryAuditRepository()): BookingService {
+  return new BookingService(operator, audits);
+}
+
 async function expectAppError(operation: Promise<unknown>): Promise<AppError> {
   try {
     await operation;
@@ -98,7 +103,7 @@ test("converts a source code through encode and verified re-decode", async () =>
     source: slip(SOURCE_CODE, sourceSelections),
     target: slip(TARGET_CODE, sourceSelections)
   });
-  const service = new BookingService(operator);
+  const service = new BookingService(operator, new InMemoryAuditRepository());
 
   const result = await service.convertBookingCode(SOURCE_CODE);
 
@@ -130,7 +135,7 @@ test("treats a reordered target slip as verified", async () => {
     target: slip(TARGET_CODE, [selection(3), selection(1), selection(2)])
   });
 
-  const result = await new BookingService(operator).convertBookingCode(SOURCE_CODE);
+  const result = await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
 
   assert.equal(result.verified, true);
   assert.equal(result.sourceFingerprint, result.targetFingerprint);
@@ -142,7 +147,7 @@ test("treats changed odds as verified", async () => {
     target: slip(TARGET_CODE, [selection(1, { odds: 1.8 }), selection(2, { odds: 1.85 })])
   });
 
-  const result = await new BookingService(operator).convertBookingCode(SOURCE_CODE);
+  const result = await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
 
   assert.equal(result.verified, true);
   assert.equal(result.sourceFingerprint, result.targetFingerprint);
@@ -158,7 +163,7 @@ test("treats changed display names as verified", async () => {
     ])
   });
 
-  const result = await new BookingService(operator).convertBookingCode(SOURCE_CODE);
+  const result = await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
 
   assert.equal(result.verified, true);
 });
@@ -170,7 +175,7 @@ test("fails parity when the target is missing a selection", async () => {
     target: slip(TARGET_CODE, [selection(1), selection(2), selection(3)])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
   assert.equal(error.status, 422);
@@ -190,7 +195,7 @@ test("fails parity when the target has an extra selection", async () => {
     target: slip(TARGET_CODE, [selection(1), selection(2), selection(3), extra])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
   assert.deepEqual((error.details as { extraIdentities: string[] }).extraIdentities, [
@@ -204,7 +209,7 @@ test("fails parity when a selectionId changes", async () => {
     target: slip(TARGET_CODE, [selection(1, { selectionId: "selection-1-other" })])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
 });
@@ -215,7 +220,7 @@ test("fails parity when the exact canonical marketId changes", async () => {
     target: slip(TARGET_CODE, [selection(1, { marketId: "market-1-other-exact" })])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
   assert.deepEqual((error.details as { missingIdentities: string[] }).missingIdentities, [
@@ -229,7 +234,7 @@ test("fails parity when an eventId changes", async () => {
     target: slip(TARGET_CODE, [selection(1, { eventId: "event-9" })])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
 });
@@ -240,7 +245,7 @@ test("does not encode when a source selection is inactive", async () => {
     target: slip(TARGET_CODE, [selection(1), selection(2)])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "SOURCE_SELECTION_UNAVAILABLE");
   assert.equal(error.status, 422);
@@ -256,7 +261,7 @@ test("does not encode when operatorMarketId is missing", async () => {
     target: slip(TARGET_CODE, [selection(1)])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_INPUT_INVALID");
   assert.equal(error.status, 422);
@@ -272,7 +277,7 @@ test("does not encode when operatorMarketId is blank", async () => {
     target: slip(TARGET_CODE, [selection(1)])
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "CONVERSION_INPUT_INVALID");
   assert.deepEqual(operator.calls, [`decode:${SOURCE_CODE}`]);
@@ -287,7 +292,7 @@ test("propagates encode failures without decoding the target", async () => {
     }
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "UPSTREAM_UNAVAILABLE");
   assert.deepEqual(operator.calls, [`decode:${SOURCE_CODE}`, "encode"]);
@@ -302,7 +307,7 @@ test("fails conversion when target decode throws", async () => {
     }
   });
 
-  const error = await expectAppError(new BookingService(operator).convertBookingCode(SOURCE_CODE));
+  const error = await expectAppError(new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE));
 
   assert.equal(error.code, "BOOKING_CODE_NOT_FOUND");
   assert.deepEqual(operator.calls, [`decode:${SOURCE_CODE}`, "encode", `decode:${TARGET_CODE}`]);
@@ -318,8 +323,109 @@ test("sends operatorMarketId to encode, never the canonical exact marketId", asy
     target: slip(TARGET_CODE, [sourceSelection])
   });
 
-  await new BookingService(operator).convertBookingCode(SOURCE_CODE);
+  await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
 
   assert.equal(operator.encodeInputs[0]?.selections[0]?.operatorMarketId, "68096464223");
   assert.equal(JSON.stringify(operator.encodeInputs).includes("68096464223hcp=1.5~"), false);
+});
+
+test("persists source and target snapshots and a verified conversion run", async () => {
+  const sourceSelections = [selection(1), selection(2)];
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, sourceSelections),
+    target: slip(TARGET_CODE, sourceSelections)
+  });
+  const audits = new InMemoryAuditRepository();
+
+  const result = await bookingService(operator, audits).convertBookingCode(SOURCE_CODE);
+
+  assert.deepEqual(
+    audits.snapshots.map((snapshot) => snapshot.captureType),
+    ["convert-source", "convert-target"]
+  );
+  assert.equal(audits.snapshots[0]?.bookingCode, SOURCE_CODE);
+  assert.equal(audits.snapshots[1]?.bookingCode, TARGET_CODE);
+  assert.equal(audits.snapshots[0]?.fingerprint, result.sourceFingerprint);
+  assert.equal(audits.snapshots[1]?.fingerprint, result.targetFingerprint);
+  assert.equal(audits.conversionRuns.length, 1);
+
+  const run = audits.conversionRuns[0];
+  assert.ok(run);
+  assert.equal(run.verified, true);
+  assert.equal(run.sourceCode, SOURCE_CODE);
+  assert.equal(run.targetCode, TARGET_CODE);
+  assert.equal(run.sourceFingerprint, result.sourceFingerprint);
+  assert.equal(run.targetFingerprint, result.targetFingerprint);
+  assert.equal(run.sourceSelectionCount, 2);
+  assert.equal(run.targetSelectionCount, 2);
+  assert.deepEqual(run.missingIdentities, []);
+  assert.deepEqual(run.extraIdentities, []);
+
+  const persisted = JSON.stringify(audits);
+  assert.equal(persisted.includes("accountId"), false);
+  assert.equal(persisted.includes("rawResponse"), false);
+});
+
+test("persists an unverified conversion run then still throws parity failure", async () => {
+  const missing = selection(4);
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1), selection(2), selection(3), missing]),
+    target: slip(TARGET_CODE, [selection(1), selection(2), selection(3)])
+  });
+  const audits = new InMemoryAuditRepository();
+
+  const error = await expectAppError(bookingService(operator, audits).convertBookingCode(SOURCE_CODE));
+
+  assert.equal(error.code, "CONVERSION_PARITY_FAILED");
+  assert.equal(audits.snapshots.length, 2);
+  assert.equal(audits.conversionRuns.length, 1);
+
+  const run = audits.conversionRuns[0];
+  assert.ok(run);
+  assert.equal(run.verified, false);
+  assert.equal(run.targetCode, TARGET_CODE);
+  assert.deepEqual(run.missingIdentities, [selectionIdentity(missing)]);
+  assert.deepEqual(run.extraIdentities, []);
+});
+
+test("does not persist conversion audits when the source is inactive", async () => {
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1, { active: false })]),
+    target: slip(TARGET_CODE, [selection(1)])
+  });
+  const audits = new InMemoryAuditRepository();
+
+  await expectAppError(bookingService(operator, audits).convertBookingCode(SOURCE_CODE));
+  assert.equal(audits.snapshots.length, 0);
+  assert.equal(audits.conversionRuns.length, 0);
+});
+
+test("does not persist conversion audits when encode fails", async () => {
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1), selection(2)]),
+    target: slip(TARGET_CODE, [selection(1), selection(2)]),
+    encode: async () => {
+      throw AppError.upstreamUnavailable("betway-ng", { status: 500 });
+    }
+  });
+  const audits = new InMemoryAuditRepository();
+
+  await expectAppError(bookingService(operator, audits).convertBookingCode(SOURCE_CODE));
+  assert.equal(audits.snapshots.length, 0);
+  assert.equal(audits.conversionRuns.length, 0);
+});
+
+test("does not persist conversion audits when target decode fails", async () => {
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1)]),
+    target: slip(TARGET_CODE, [selection(1)]),
+    decodeTarget: async () => {
+      throw AppError.bookingCodeNotFound(TARGET_CODE);
+    }
+  });
+  const audits = new InMemoryAuditRepository();
+
+  await expectAppError(bookingService(operator, audits).convertBookingCode(SOURCE_CODE));
+  assert.equal(audits.snapshots.length, 0);
+  assert.equal(audits.conversionRuns.length, 0);
 });

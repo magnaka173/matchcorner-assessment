@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AppError } from "../errors/app-error.js";
 import type { BookingOperator } from "../operators/booking-operator.js";
+import { InMemoryAuditRepository } from "../repositories/memory-audit.repository.js";
 import { BookingService } from "./booking.service.js";
 
 function slipFor(bookingCode: string, odds = 1.74): Betslip {
@@ -50,9 +51,13 @@ function operatorReturning(slip: Betslip): BookingOperator {
   };
 }
 
+function bookingService(operator: BookingOperator, audits = new InMemoryAuditRepository()): BookingService {
+  return new BookingService(operator, audits);
+}
+
 test("returns the canonical slip together with its fingerprint", async () => {
   const slip = slipFor("BW69DC9F6B");
-  const service = new BookingService(operatorReturning(slip));
+  const service = new BookingService(operatorReturning(slip), new InMemoryAuditRepository());
 
   const decoded = await service.decodeBookingCode("BW69DC9F6B");
 
@@ -62,7 +67,7 @@ test("returns the canonical slip together with its fingerprint", async () => {
 
 test("derives the fingerprint from canonical selection identity", async () => {
   const slip = slipFor("BW69DC9F6B");
-  const service = new BookingService(operatorReturning(slip));
+  const service = new BookingService(operatorReturning(slip), new InMemoryAuditRepository());
 
   const decoded = await service.decodeBookingCode("BW69DC9F6B");
 
@@ -70,28 +75,33 @@ test("derives the fingerprint from canonical selection identity", async () => {
 });
 
 test("keeps the fingerprint stable when only the odds move", async () => {
-  const first = await new BookingService(operatorReturning(slipFor("BW69DC9F6B", 1.74))).decodeBookingCode(
-    "BW69DC9F6B"
-  );
-  const second = await new BookingService(operatorReturning(slipFor("BW69DC9F6B", 2.31))).decodeBookingCode(
-    "BW69DC9F6B"
-  );
+  const first = await new BookingService(
+    operatorReturning(slipFor("BW69DC9F6B", 1.74)),
+    new InMemoryAuditRepository()
+  ).decodeBookingCode("BW69DC9F6B");
+  const second = await new BookingService(
+    operatorReturning(slipFor("BW69DC9F6B", 2.31)),
+    new InMemoryAuditRepository()
+  ).decodeBookingCode("BW69DC9F6B");
 
   assert.equal(first.fingerprint, second.fingerprint);
 });
 
 test("passes the booking code through to the operator", async () => {
   const seen: string[] = [];
-  const service = new BookingService({
-    operator: "betway-ng",
-    decode: async (bookingCode) => {
-      seen.push(bookingCode);
-      return slipFor(bookingCode);
+  const service = new BookingService(
+    {
+      operator: "betway-ng",
+      decode: async (bookingCode) => {
+        seen.push(bookingCode);
+        return slipFor(bookingCode);
+      },
+      encode: async () => {
+        throw new Error("encode should not be called during decode");
+      }
     },
-    encode: async () => {
-      throw new Error("encode should not be called during decode");
-    }
-  });
+    new InMemoryAuditRepository()
+  );
 
   await service.decodeBookingCode("BW1234ABCD");
 
@@ -99,15 +109,18 @@ test("passes the booking code through to the operator", async () => {
 });
 
 test("propagates operator errors unchanged", async () => {
-  const service = new BookingService({
-    operator: "betway-ng",
-    decode: async () => {
-      throw AppError.bookingCodeNotFound("BWMISSING");
+  const service = new BookingService(
+    {
+      operator: "betway-ng",
+      decode: async () => {
+        throw AppError.bookingCodeNotFound("BWMISSING");
+      },
+      encode: async () => {
+        throw new Error("encode should not be called during decode");
+      }
     },
-    encode: async () => {
-      throw new Error("encode should not be called during decode");
-    }
-  });
+    new InMemoryAuditRepository()
+  );
 
   await assert.rejects(service.decodeBookingCode("BWMISSING"), (error: unknown) => {
     assert.ok(error instanceof AppError);
@@ -119,17 +132,20 @@ test("propagates operator errors unchanged", async () => {
 test("returns the created booking code without decoding it", async () => {
   let decodeCalls = 0;
   const seen: EncodeSlipInput[] = [];
-  const service = new BookingService({
-    operator: "betway-ng",
-    decode: async () => {
-      decodeCalls += 1;
-      throw new Error("decode should not be called during encode");
+  const service = new BookingService(
+    {
+      operator: "betway-ng",
+      decode: async () => {
+        decodeCalls += 1;
+        throw new Error("decode should not be called during encode");
+      },
+      encode: async (input) => {
+        seen.push(input);
+        return "BWENCODE01";
+      }
     },
-    encode: async (input) => {
-      seen.push(input);
-      return "BWENCODE01";
-    }
-  });
+    new InMemoryAuditRepository()
+  );
 
   const encoded = await service.encodeSelections(encodeInput);
 
@@ -139,19 +155,85 @@ test("returns the created booking code without decoding it", async () => {
 });
 
 test("propagates encode operator errors unchanged", async () => {
-  const service = new BookingService({
-    operator: "betway-ng",
-    decode: async () => {
-      throw new Error("decode should not be called during encode");
+  const service = new BookingService(
+    {
+      operator: "betway-ng",
+      decode: async () => {
+        throw new Error("decode should not be called during encode");
+      },
+      encode: async () => {
+        throw AppError.upstreamUnavailable("betway-ng", { status: 500 });
+      }
     },
-    encode: async () => {
-      throw AppError.upstreamUnavailable("betway-ng", { status: 500 });
-    }
-  });
+    new InMemoryAuditRepository()
+  );
 
   await assert.rejects(service.encodeSelections(encodeInput), (error: unknown) => {
     assert.ok(error instanceof AppError);
     assert.equal(error.code, "UPSTREAM_UNAVAILABLE");
     return true;
   });
+});
+
+test("persists a canonical decode snapshot after success", async () => {
+  const slip = slipFor("BW69DC9F6B");
+  const audits = new InMemoryAuditRepository();
+  const decoded = await bookingService(operatorReturning(slip), audits).decodeBookingCode("BW69DC9F6B");
+
+  assert.equal(audits.snapshots.length, 1);
+  assert.equal(audits.conversionRuns.length, 0);
+
+  const snapshot = audits.snapshots[0];
+  assert.ok(snapshot);
+  assert.equal(snapshot.captureType, "decode");
+  assert.equal(snapshot.bookingCode, "BW69DC9F6B");
+  assert.equal(snapshot.fingerprint, decoded.fingerprint);
+  assert.equal(snapshot.selectionCount, 1);
+  assert.equal(snapshot.betType, "multi");
+  assert.equal(snapshot.operator, "betway-ng");
+  assert.deepEqual(snapshot.slip, slip);
+
+  const persisted = JSON.stringify(snapshot.slip);
+  assert.equal(persisted.includes("accountId"), false);
+  assert.equal(persisted.includes("cookie"), false);
+  assert.equal(persisted.includes("authorization"), false);
+  assert.equal(persisted.includes("rawResponse"), false);
+});
+
+test("does not persist a snapshot when decode fails", async () => {
+  const audits = new InMemoryAuditRepository();
+  const service = bookingService(
+    {
+      operator: "betway-ng",
+      decode: async () => {
+        throw AppError.bookingCodeNotFound("BWMISSING");
+      },
+      encode: async () => {
+        throw new Error("encode should not be called during decode");
+      }
+    },
+    audits
+  );
+
+  await assert.rejects(service.decodeBookingCode("BWMISSING"));
+  assert.equal(audits.snapshots.length, 0);
+  assert.equal(audits.conversionRuns.length, 0);
+});
+
+test("does not persist anything for encode", async () => {
+  const audits = new InMemoryAuditRepository();
+  const service = bookingService(
+    {
+      operator: "betway-ng",
+      decode: async () => {
+        throw new Error("decode should not be called during encode");
+      },
+      encode: async () => "BWENCODE01"
+    },
+    audits
+  );
+
+  await service.encodeSelections(encodeInput);
+  assert.equal(audits.snapshots.length, 0);
+  assert.equal(audits.conversionRuns.length, 0);
 });

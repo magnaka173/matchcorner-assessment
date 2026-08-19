@@ -6,6 +6,7 @@ import { after, before, test } from "node:test";
 import { createApp } from "../app.js";
 import { AppError } from "../errors/app-error.js";
 import type { BookingOperator } from "../operators/booking-operator.js";
+import { InMemoryAuditRepository } from "../repositories/memory-audit.repository.js";
 import { BookingService } from "../services/booking.service.js";
 
 function slipFor(bookingCode: string): Betslip {
@@ -50,7 +51,7 @@ const consoleError = console.error;
 before(async () => {
   console.error = () => {};
 
-  const app = createApp({ bookingService: new BookingService(stubOperator) });
+  const app = createApp({ bookingService: new BookingService(stubOperator, new InMemoryAuditRepository()) });
 
   server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));

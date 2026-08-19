@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SlipSnapshot {
+  id             String   @id @default(cuid())
+  operator       String
+  bookingCode    String
+  fingerprint    String
+  betType        String
+  selectionCount Int
+  slip           Json
+  captureType    String
+  capturedAt     DateTime @default(now())
+
+  @@index([bookingCode])
+  @@index([fingerprint])
+  @@index([capturedAt])
+}
+
+model ConversionRun {
+  id                   String   @id @default(cuid())
+  operator             String
+  sourceCode           String
+  targetCode           String?
+  sourceFingerprint    String
+  targetFingerprint    String?
+  verified             Boolean
+  sourceSelectionCount Int
+  targetSelectionCount Int?
+  missingIdentities    Json?
+  extraIdentities      Json?
+  createdAt            DateTime @default(now())
+
+  @@index([sourceCode])
+  @@index([targetCode])
+  @@index([verified])
+  @@index([createdAt])
+}
