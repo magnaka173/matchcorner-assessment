@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { betwayDecodeUrl, loadBetwayConfig, BETWAY_DECODE_PATH } from "./betway.config.js";
+import { betwayDecodeUrl, betwayEncodeUrl, loadBetwayConfig, BETWAY_DECODE_PATH, BETWAY_ENCODE_PATH } from "./betway.config.js";
 
 test("falls back to the documented public Betway Nigeria configuration", () => {
   const config = loadBetwayConfig({});
@@ -32,6 +32,13 @@ test("builds the FindBookABet url from the configured base url", () => {
   assert.equal(
     betwayDecodeUrl(loadBetwayConfig({})),
     `https://www.betway.com.ng${BETWAY_DECODE_PATH}`
+  );
+});
+
+test("builds the BookABet url from the configured base url", () => {
+  assert.equal(
+    betwayEncodeUrl(loadBetwayConfig({})),
+    `https://www.betway.com.ng${BETWAY_ENCODE_PATH}`
   );
 });
 

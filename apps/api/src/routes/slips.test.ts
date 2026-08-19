@@ -1,4 +1,4 @@
-import type { Betslip } from "@matchcorner/contracts";
+import type { Betslip, EncodeSlipInput } from "@matchcorner/contracts";
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -33,10 +33,12 @@ function slipFor(bookingCode: string): Betslip {
 }
 
 let decode: (bookingCode: string) => Promise<Betslip> = async (bookingCode) => slipFor(bookingCode);
+let encode: (input: EncodeSlipInput) => Promise<string> = async () => "BWENCODE01";
 
 const stubOperator: BookingOperator = {
   operator: "betway-ng",
-  decode: (bookingCode) => decode(bookingCode)
+  decode: (bookingCode) => decode(bookingCode),
+  encode: (input) => encode(input)
 };
 
 let server: Server;
@@ -69,6 +71,16 @@ async function postDecode(body: unknown, raw?: string) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: raw ?? JSON.stringify(body)
+  });
+
+  return { status: response.status, body: (await response.json()) as Record<string, any> };
+}
+
+async function postEncode(body: unknown) {
+  const response = await fetch(`${baseUrl}/api/v1/slips/encode`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
   });
 
   return { status: response.status, body: (await response.json()) as Record<string, any> };
@@ -173,4 +185,135 @@ test("returns 500 for an unexpected internal failure", async () => {
   assert.equal(response.status, 500);
   assert.equal(response.body["error"].code, "INTERNAL_ERROR");
   assert.equal(JSON.stringify(response.body).includes("postgres"), false);
+});
+
+const verifiedSelection = {
+  eventId: "68096464",
+  eventName: "Connecticut Sun vs. Los Angeles Sparks",
+  sport: "basketball",
+  marketId: "68096464223hcp=1.5~",
+  operatorMarketId: "68096464223",
+  marketName: "Handicap (Incl. Overtime)",
+  selectionId: "68096464223hcp=1.5~1715",
+  selectionName: "Los Angeles Sparks (-1.5)",
+  handicap: 1.5,
+  odds: 1.74,
+  active: true
+};
+
+test("encodes selections into a booking code", async () => {
+  encode = async () => "BWENCODE01";
+
+  const response = await postEncode({
+    betType: "single",
+    selections: [verifiedSelection]
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { bookingCode: "BWENCODE01" });
+});
+
+test("strips display and canonical market fields before reaching the operator", async () => {
+  const seen: EncodeSlipInput[] = [];
+  encode = async (input) => {
+    seen.push(input);
+    return "BWENCODE01";
+  };
+
+  const response = await postEncode({
+    betType: "single",
+    selections: [verifiedSelection]
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(seen, [
+    {
+      betType: "single",
+      selections: [
+        {
+          eventId: "68096464",
+          operatorMarketId: "68096464223",
+          selectionId: "68096464223hcp=1.5~1715"
+        }
+      ]
+    }
+  ]);
+});
+
+test("rejects encode requests with no selections", async () => {
+  const response = await postEncode({ betType: "multi", selections: [] });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("rejects encode requests with an invalid eventId", async () => {
+  const response = await postEncode({
+    betType: "single",
+    selections: [{ ...verifiedSelection, eventId: "not-a-number" }]
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("rejects encode requests missing operatorMarketId", async () => {
+  const { operatorMarketId: _omitted, ...withoutOperatorMarket } = verifiedSelection;
+  const response = await postEncode({
+    betType: "single",
+    selections: [withoutOperatorMarket]
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("rejects encode requests with a blank operatorMarketId", async () => {
+  const response = await postEncode({
+    betType: "single",
+    selections: [{ ...verifiedSelection, operatorMarketId: "   " }]
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("rejects a single bet with more than one selection", async () => {
+  const response = await postEncode({
+    betType: "single",
+    selections: [verifiedSelection, { ...verifiedSelection, eventId: "68096586" }]
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("rejects a multi bet with fewer than two selections", async () => {
+  const response = await postEncode({
+    betType: "multi",
+    selections: [verifiedSelection]
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("returns 502 for an encode upstream failure without leaking upstream detail", async () => {
+  encode = async () => {
+    throw AppError.upstreamUnavailable("betway-ng", {
+      status: 500,
+      cause: new Error("<html>betway gateway error</html>")
+    });
+  };
+
+  const response = await postEncode({
+    betType: "single",
+    selections: [verifiedSelection]
+  });
+  const serialized = JSON.stringify(response.body);
+
+  assert.equal(response.status, 502);
+  assert.equal(response.body["error"].code, "UPSTREAM_UNAVAILABLE");
+  assert.equal(serialized.includes("html"), false);
+  assert.equal(response.body["error"].details, undefined);
 });

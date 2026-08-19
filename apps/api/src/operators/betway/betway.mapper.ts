@@ -1,6 +1,10 @@
-import type { Betslip, Selection } from "@matchcorner/contracts";
+import type { Betslip, EncodeSlipInput, Selection } from "@matchcorner/contracts";
 import { BETWAY_OPERATOR_NAME } from "./betway.config.js";
-import type { BetwaySelection, FindBookABetResponse } from "./betway.schemas.js";
+import type {
+  BetwaySelection,
+  BookABetRequest,
+  FindBookABetResponse
+} from "./betway.schemas.js";
 
 type MaybeText = string | number | null | undefined;
 
@@ -61,7 +65,7 @@ export function mapBetwaySelection(raw: BetwaySelection): Selection {
         raw.market?.name
       ) ?? "",
 
-    // Parent/display market: what BookABet will need when Encode is added.
+    // Parent/display market: what BookABet requires on encode.
     operatorMarketId: raw.market?.marketId ?? raw.marketId,
 
     selectionId: raw.outcomeId,
@@ -87,5 +91,30 @@ export function mapFindBookABetResponse(
     betType: response.isSingleBet ? "single" : "multi",
     isBuildABet: response.isBuildABet === true,
     selections: response.selections.map(mapBetwaySelection)
+  };
+}
+
+/**
+ * Canonical encode input → Betway `BookABet` body.
+ *
+ * `operatorMarketId` is the parent/display market. The exact line-level
+ * `marketId` used for fingerprints must never be sent here.
+ */
+export function mapToBookABetRequest(
+  input: EncodeSlipInput,
+  options: { countryCode: string; cultureCode: string }
+): BookABetRequest {
+  return {
+    cultureCode: options.cultureCode,
+    countryCode: options.countryCode,
+    isSingleBet: input.betType === "single",
+    outcomes: input.selections.map((selection) => ({
+      outcomeId: selection.selectionId,
+      eventId: Number(selection.eventId),
+      marketId: selection.operatorMarketId,
+      payment: 1,
+      value: 0,
+      selected: true
+    }))
   };
 }

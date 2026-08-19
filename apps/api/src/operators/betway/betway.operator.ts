@@ -1,15 +1,16 @@
-import type { Betslip, Operator } from "@matchcorner/contracts";
+import type { Betslip, EncodeSlipInput, Operator } from "@matchcorner/contracts";
 import type { ZodError } from "zod";
 import { AppError } from "../../errors/app-error.js";
 import type { BookingOperator } from "../booking-operator.js";
 import {
   BETWAY_OPERATOR_NAME,
   betwayDecodeUrl,
+  betwayEncodeUrl,
   loadBetwayConfig,
   type BetwayConfig
 } from "./betway.config.js";
-import { mapFindBookABetResponse } from "./betway.mapper.js";
-import { findBookABetResponseSchema } from "./betway.schemas.js";
+import { mapFindBookABetResponse, mapToBookABetRequest } from "./betway.mapper.js";
+import { bookABetResponseSchema, findBookABetResponseSchema } from "./betway.schemas.js";
 
 export type FetchLike = typeof globalThis.fetch;
 type FetchResponse = Awaited<ReturnType<FetchLike>>;
@@ -35,8 +36,8 @@ function summarizeSchemaFailure(error: ZodError): string {
 /**
  * Betway Nigeria booking-code operator.
  *
- * The raw Betway response shape stops here: callers only ever receive canonical
- * contracts or an `AppError`.
+ * The raw Betway request/response shape stops here: callers only ever receive
+ * canonical contracts or an `AppError`.
  */
 export class BetwayNigeriaOperator implements BookingOperator {
   readonly operator: Operator = BETWAY_OPERATOR_NAME;
@@ -65,22 +66,52 @@ export class BetwayNigeriaOperator implements BookingOperator {
     return mapFindBookABetResponse(bookingCode, parsed.data);
   }
 
-  private async findBookABet(bookingCode: string): Promise<unknown> {
-    let response: FetchResponse;
+  async encode(input: EncodeSlipInput): Promise<string> {
+    const payload = await this.bookABet(input);
 
+    const parsed = bookABetResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw AppError.upstreamContractMismatch(this.operator, summarizeSchemaFailure(parsed.error));
+    }
+
+    return parsed.data.bookingCode;
+  }
+
+  private async findBookABet(bookingCode: string): Promise<unknown> {
+    const response = await this.sendJson(betwayDecodeUrl(this.config), {
+      countryCode: this.config.countryCode,
+      bookingCode,
+      cultureCode: this.config.cultureCode
+    });
+
+    if (response.status === 404) {
+      throw AppError.bookingCodeNotFound(bookingCode);
+    }
+
+    this.rejectIfUpstreamFailed(response);
+    return this.parseJsonBody(response);
+  }
+
+  private async bookABet(input: EncodeSlipInput): Promise<unknown> {
+    const response = await this.sendJson(
+      betwayEncodeUrl(this.config),
+      mapToBookABetRequest(input, this.config)
+    );
+
+    this.rejectIfUpstreamFailed(response);
+    return this.parseJsonBody(response);
+  }
+
+  private async sendJson(url: string, body: unknown): Promise<FetchResponse> {
     try {
-      response = await this.fetchImpl(betwayDecodeUrl(this.config), {
+      return await this.fetchImpl(url, {
         method: "POST",
         headers: {
           accept: "application/json",
           "content-type": "application/json",
           "x-brand-id": this.config.brandId
         },
-        body: JSON.stringify({
-          countryCode: this.config.countryCode,
-          bookingCode,
-          cultureCode: this.config.cultureCode
-        }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(this.config.timeoutMs)
       });
     } catch (error) {
@@ -89,15 +120,15 @@ export class BetwayNigeriaOperator implements BookingOperator {
       }
       throw AppError.upstreamUnavailable(this.operator, { cause: error });
     }
+  }
 
-    if (response.status === 404) {
-      throw AppError.bookingCodeNotFound(bookingCode);
-    }
-
+  private rejectIfUpstreamFailed(response: FetchResponse): void {
     if (!response.ok) {
       throw AppError.upstreamUnavailable(this.operator, { status: response.status });
     }
+  }
 
+  private async parseJsonBody(response: FetchResponse): Promise<unknown> {
     try {
       return await response.json();
     } catch (error) {

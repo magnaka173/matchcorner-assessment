@@ -1,8 +1,8 @@
-import type { Betslip, Selection } from "@matchcorner/contracts";
+import type { Betslip, EncodeSlipInput, Selection } from "@matchcorner/contracts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { findBookABetFixture } from "./betway.fixtures.js";
-import { mapFindBookABetResponse } from "./betway.mapper.js";
+import { mapFindBookABetResponse, mapToBookABetRequest } from "./betway.mapper.js";
 import { findBookABetResponseSchema } from "./betway.schemas.js";
 
 const BOOKING_CODE = "BW69DC9F6B";
@@ -187,4 +187,97 @@ test("does not expose accountId or any other unmodelled upstream field", () => {
   for (const selection of slip.selections) {
     assert.deepEqual(Object.keys(selection).sort(), expectedKeys);
   }
+});
+
+const verifiedEncodeSelection = {
+  eventId: "68096464",
+  operatorMarketId: "68096464223",
+  selectionId: "68096464223hcp=1.5~1715"
+};
+
+const locale = { countryCode: "NG", cultureCode: "en-US" };
+
+test("maps a single bet onto BookABet with isSingleBet true", () => {
+  const input: EncodeSlipInput = {
+    betType: "single",
+    selections: [verifiedEncodeSelection]
+  };
+
+  const request = mapToBookABetRequest(input, locale);
+
+  assert.deepEqual(request, {
+    cultureCode: "en-US",
+    countryCode: "NG",
+    isSingleBet: true,
+    outcomes: [
+      {
+        outcomeId: "68096464223hcp=1.5~1715",
+        eventId: 68096464,
+        marketId: "68096464223",
+        payment: 1,
+        value: 0,
+        selected: true
+      }
+    ]
+  });
+});
+
+test("maps a multi bet onto BookABet with isSingleBet false", () => {
+  const input: EncodeSlipInput = {
+    betType: "multi",
+    selections: [
+      verifiedEncodeSelection,
+      {
+        eventId: "68096586",
+        operatorMarketId: "68096586223",
+        selectionId: "68096586223hcp=10.5~1715"
+      }
+    ]
+  };
+
+  const request = mapToBookABetRequest(input, locale);
+
+  assert.equal(request.isSingleBet, false);
+  assert.equal(request.outcomes.length, 2);
+});
+
+test("sends operatorMarketId as BookABet marketId, never the exact canonical line", () => {
+  const request = mapToBookABetRequest(
+    { betType: "single", selections: [verifiedEncodeSelection] },
+    locale
+  );
+  const outcome = request.outcomes[0];
+  assert.ok(outcome);
+
+  assert.equal(outcome.marketId, "68096464223");
+  assert.equal(outcome.outcomeId, "68096464223hcp=1.5~1715");
+  assert.equal(typeof outcome.eventId, "number");
+  assert.equal(outcome.eventId, 68096464);
+  assert.notEqual(outcome.marketId, "68096464223hcp=1.5~");
+});
+
+test("BookABet payload contains only the verified write fields", () => {
+  const request = mapToBookABetRequest(
+    { betType: "single", selections: [verifiedEncodeSelection] },
+    locale
+  );
+  const serialized = JSON.stringify(request);
+
+  assert.equal(serialized.includes("accountId"), false);
+  assert.equal(serialized.includes("odds"), false);
+  assert.equal(serialized.includes("cookie"), false);
+  assert.equal(serialized.includes("authorization"), false);
+  assert.equal(serialized.includes("68096464223hcp=1.5~1715"), true);
+  assert.equal(serialized.includes("\"marketId\":\"68096464223hcp=1.5~\""), false);
+
+  const outcome = request.outcomes[0];
+  assert.ok(outcome);
+  assert.deepEqual(Object.keys(outcome).sort(), [
+    "eventId",
+    "marketId",
+    "outcomeId",
+    "payment",
+    "selected",
+    "value"
+  ]);
 });

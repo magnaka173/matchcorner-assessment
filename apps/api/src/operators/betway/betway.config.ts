@@ -11,6 +11,7 @@ import { z } from "zod";
 
 export const BETWAY_OPERATOR_NAME: Operator = "betway-ng";
 export const BETWAY_DECODE_PATH = "/appsynapse/bet-api-sr02/v2/Betting/FindBookABet";
+export const BETWAY_ENCODE_PATH = "/appsynapse/bet-api-sr02/v2/Betting/BookABet";
 
 const betwayEnvSchema = z.object({
   BETWAY_BASE_URL: z.url().default("https://www.betway.com.ng"),
@@ -47,4 +48,8 @@ export function loadBetwayConfig(env: NodeJS.ProcessEnv = process.env): BetwayCo
 
 export function betwayDecodeUrl(config: BetwayConfig): string {
   return `${config.baseUrl}${BETWAY_DECODE_PATH}`;
+}
+
+export function betwayEncodeUrl(config: BetwayConfig): string {
+  return `${config.baseUrl}${BETWAY_ENCODE_PATH}`;
 }

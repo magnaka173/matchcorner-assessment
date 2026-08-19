@@ -77,5 +77,39 @@ export const findBookABetResponseSchema = z.looseObject({
   isBuildABet: optionalFlag
 });
 
+/**
+ * Booking codes observed on Betway are `BW` + hex, but the suffix length is
+ * not contractually guaranteed. Keep this aligned with the local decode input
+ * rule: reject obvious junk without rejecting a valid future code.
+ */
+const createdBookingCodeSchema = z
+  .string()
+  .trim()
+  .min(4)
+  .max(32)
+  .transform((value) => value.toUpperCase())
+  .refine((value) => /^BW[A-Z0-9]+$/.test(value));
+
+export const bookABetResponseSchema = z.looseObject({
+  bookingCode: createdBookingCodeSchema
+});
+
+export interface BookABetOutcome {
+  outcomeId: string;
+  eventId: number;
+  marketId: string;
+  payment: 1;
+  value: 0;
+  selected: true;
+}
+
+export interface BookABetRequest {
+  cultureCode: string;
+  countryCode: string;
+  isSingleBet: boolean;
+  outcomes: BookABetOutcome[];
+}
+
 export type BetwaySelection = z.infer<typeof betwaySelectionSchema>;
 export type FindBookABetResponse = z.infer<typeof findBookABetResponseSchema>;
+export type BookABetResponse = z.infer<typeof bookABetResponseSchema>;
