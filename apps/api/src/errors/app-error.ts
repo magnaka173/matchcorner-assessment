@@ -9,6 +9,9 @@
 export type AppErrorCode =
   | "INVALID_REQUEST"
   | "BOOKING_CODE_NOT_FOUND"
+  | "SOURCE_SELECTION_UNAVAILABLE"
+  | "CONVERSION_INPUT_INVALID"
+  | "CONVERSION_PARITY_FAILED"
   | "UPSTREAM_TIMEOUT"
   | "UPSTREAM_UNAVAILABLE"
   | "UPSTREAM_CONTRACT_MISMATCH"
@@ -17,11 +20,22 @@ export type AppErrorCode =
 const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   INVALID_REQUEST: 400,
   BOOKING_CODE_NOT_FOUND: 404,
+  SOURCE_SELECTION_UNAVAILABLE: 422,
+  CONVERSION_INPUT_INVALID: 422,
+  CONVERSION_PARITY_FAILED: 422,
   UPSTREAM_TIMEOUT: 504,
   UPSTREAM_UNAVAILABLE: 502,
   UPSTREAM_CONTRACT_MISMATCH: 502,
   INTERNAL_ERROR: 500
 };
+
+/** Codes whose `details` are derived from our own domain data and are safe to return. */
+export const CLIENT_VISIBLE_ERROR_DETAILS: ReadonlySet<AppErrorCode> = new Set([
+  "INVALID_REQUEST",
+  "SOURCE_SELECTION_UNAVAILABLE",
+  "CONVERSION_INPUT_INVALID",
+  "CONVERSION_PARITY_FAILED"
+]);
 
 export interface AppErrorOptions {
   /** Safe to return to the client. Only ever derived from our own validation. */
@@ -79,6 +93,42 @@ export class AppError extends Error {
       "UPSTREAM_CONTRACT_MISMATCH",
       "The betting operator response did not match the expected contract.",
       { cause, logContext: { operator, reason } }
+    );
+  }
+
+  static sourceSelectionUnavailable(unavailableIdentities: string[]): AppError {
+    return new AppError("SOURCE_SELECTION_UNAVAILABLE", "One or more selections are no longer available.", {
+      details: { unavailableIdentities },
+      logContext: { unavailableCount: unavailableIdentities.length }
+    });
+  }
+
+  static conversionInputInvalid(invalidIdentities: string[]): AppError {
+    return new AppError(
+      "CONVERSION_INPUT_INVALID",
+      "A decoded selection is missing the operator market identifier required to encode.",
+      { details: { invalidIdentities }, logContext: { invalidCount: invalidIdentities.length } }
+    );
+  }
+
+  static conversionParityFailed(details: {
+    targetCode: string;
+    expectedSelectionCount: number;
+    actualSelectionCount: number;
+    missingIdentities: string[];
+    extraIdentities: string[];
+  }): AppError {
+    return new AppError(
+      "CONVERSION_PARITY_FAILED",
+      "The generated booking code does not contain the same selections.",
+      {
+        details,
+        logContext: {
+          targetCode: details.targetCode,
+          expectedSelectionCount: details.expectedSelectionCount,
+          actualSelectionCount: details.actualSelectionCount
+        }
+      }
     );
   }
 }

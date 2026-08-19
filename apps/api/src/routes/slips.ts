@@ -20,6 +20,8 @@ export const decodeSlipRequestSchema = z.object({
   bookingCode: bookingCodeSchema
 });
 
+export const convertSlipRequestSchema = decodeSlipRequestSchema;
+
 const encodeSelectionSchema = z.object({
   eventId: z
     .union([z.string(), z.number()])
@@ -81,6 +83,17 @@ export function createSlipsRouter(bookingService: BookingService): Router {
 
     const encoded = await bookingService.encodeSelections(parsed.data);
     res.json(encoded);
+  });
+
+  router.post("/convert", async (req, res) => {
+    const parsed = convertSlipRequestSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      throw AppError.invalidRequest("Invalid convert request.", toValidationDetails(parsed.error));
+    }
+
+    const converted = await bookingService.convertBookingCode(parsed.data.bookingCode);
+    res.json(converted);
   });
 
   return router;

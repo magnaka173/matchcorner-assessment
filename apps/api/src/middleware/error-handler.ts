@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler } from "express";
-import { AppError, isAppError } from "../errors/app-error.js";
+import { AppError, CLIENT_VISIBLE_ERROR_DETAILS, isAppError } from "../errors/app-error.js";
 
 interface ErrorResponseBody {
   error: {
@@ -53,8 +53,8 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     }
   };
 
-  // Only our own validation output is echoed back; upstream payloads never are.
-  if (appError.code === "INVALID_REQUEST" && appError.details !== undefined) {
+  // Only application-owned details are echoed back; upstream payloads never are.
+  if (appError.details !== undefined && CLIENT_VISIBLE_ERROR_DETAILS.has(appError.code)) {
     body.error.details = appError.details;
   }
 

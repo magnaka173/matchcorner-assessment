@@ -86,6 +86,16 @@ async function postEncode(body: unknown) {
   return { status: response.status, body: (await response.json()) as Record<string, any> };
 }
 
+async function postConvert(body: unknown) {
+  const response = await fetch(`${baseUrl}/api/v1/slips/convert`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  return { status: response.status, body: (await response.json()) as Record<string, any> };
+}
+
 test("decodes a booking code into a slip and fingerprint", async () => {
   decode = async (bookingCode) => slipFor(bookingCode);
 
@@ -316,4 +326,53 @@ test("returns 502 for an encode upstream failure without leaking upstream detail
   assert.equal(response.body["error"].code, "UPSTREAM_UNAVAILABLE");
   assert.equal(serialized.includes("html"), false);
   assert.equal(response.body["error"].details, undefined);
+});
+
+test("rejects a convert request with a missing bookingCode", async () => {
+  const response = await postConvert({});
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body["error"].code, "INVALID_REQUEST");
+});
+
+test("converts a booking code and returns the verified target slip", async () => {
+  decode = async (bookingCode) => slipFor(bookingCode);
+  encode = async () => "BWTARGET01";
+
+  const response = await postConvert({ bookingCode: "BWSOURCE01" });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body["sourceCode"], "BWSOURCE01");
+  assert.equal(response.body["targetCode"], "BWTARGET01");
+  assert.equal(response.body["verified"], true);
+  assert.equal(response.body["sourceFingerprint"], response.body["targetFingerprint"]);
+  assert.equal(response.body["sourceSelectionCount"], 1);
+  assert.equal(response.body["targetSelectionCount"], 1);
+  assert.equal(response.body["slip"].bookingCode, "BWTARGET01");
+  assert.match(response.body["sourceFingerprint"], /^[0-9a-f]{64}$/);
+});
+
+test("returns 422 when conversion parity fails", async () => {
+  decode = async (bookingCode) => {
+    const decoded = slipFor(bookingCode);
+    if (bookingCode === "BWTARGET01") {
+      const [only] = decoded.selections;
+      assert.ok(only);
+      return { ...decoded, selections: [{ ...only, selectionId: "changed-outcome" }] };
+    }
+    return decoded;
+  };
+  encode = async () => "BWTARGET01";
+
+  const response = await postConvert({ bookingCode: "BWSOURCE01" });
+  const serialized = JSON.stringify(response.body);
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body["error"].code, "CONVERSION_PARITY_FAILED");
+  assert.equal(response.body["error"].details.targetCode, "BWTARGET01");
+  assert.equal(response.body["error"].details.expectedSelectionCount, 1);
+  assert.equal(response.body["error"].details.actualSelectionCount, 1);
+  assert.ok(Array.isArray(response.body["error"].details.missingIdentities));
+  assert.equal(serialized.includes("accountId"), false);
+  assert.equal(serialized.includes("html"), false);
 });
