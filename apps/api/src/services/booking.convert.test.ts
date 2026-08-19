@@ -139,6 +139,7 @@ test("treats a reordered target slip as verified", async () => {
 
   assert.equal(result.verified, true);
   assert.equal(result.sourceFingerprint, result.targetFingerprint);
+  assert.equal(result.sourceSelectionCount, result.targetSelectionCount);
 });
 
 test("treats changed odds as verified", async () => {
@@ -151,6 +152,7 @@ test("treats changed odds as verified", async () => {
 
   assert.equal(result.verified, true);
   assert.equal(result.sourceFingerprint, result.targetFingerprint);
+  assert.equal(result.sourceSelectionCount, result.targetSelectionCount);
 });
 
 test("treats changed display names as verified", async () => {
@@ -166,12 +168,31 @@ test("treats changed display names as verified", async () => {
   const result = await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
 
   assert.equal(result.verified, true);
+  assert.equal(result.sourceFingerprint, result.targetFingerprint);
+  assert.equal(result.sourceSelectionCount, result.targetSelectionCount);
 });
 
-test("fails parity when the target is missing a selection", async () => {
-  const missing = selection(4);
+test("treats changed startTime as verified", async () => {
   const operator = recordingOperator({
-    source: slip(SOURCE_CODE, [selection(1), selection(2), selection(3), missing]),
+    source: slip(SOURCE_CODE, [selection(1, { startTime: "2026-08-18T23:00:00.000Z" })]),
+    target: slip(TARGET_CODE, [selection(1, { startTime: "2026-08-19T01:30:00.000Z" })])
+  });
+
+  const result = await new BookingService(operator, new InMemoryAuditRepository()).convertBookingCode(SOURCE_CODE);
+
+  assert.equal(result.verified, true);
+  assert.equal(result.sourceFingerprint, result.targetFingerprint);
+  assert.equal(result.sourceSelectionCount, result.targetSelectionCount);
+});
+
+test("fails conversion when re-decode returns fewer selections than BookABet accepted", async () => {
+  // Observed during reconnaissance: a 4-selection source was accepted by BookABet,
+  // but re-decoding the generated code returned only 3 selections — an upstream
+  // availability race. Round-trip parity exists so that case cannot be reported
+  // as a successful conversion.
+  const dropped = selection(4);
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1), selection(2), selection(3), dropped]),
     target: slip(TARGET_CODE, [selection(1), selection(2), selection(3)])
   });
 
@@ -179,11 +200,12 @@ test("fails parity when the target is missing a selection", async () => {
 
   assert.equal(error.code, "CONVERSION_PARITY_FAILED");
   assert.equal(error.status, 422);
+  assert.equal(error.details && typeof error.details === "object" && "rawResponse" in error.details, false);
   assert.deepEqual(error.details, {
     targetCode: TARGET_CODE,
     expectedSelectionCount: 4,
     actualSelectionCount: 3,
-    missingIdentities: [selectionIdentity(missing)],
+    missingIdentities: [selectionIdentity(dropped)],
     extraIdentities: []
   });
 });
@@ -364,6 +386,7 @@ test("persists source and target snapshots and a verified conversion run", async
   const persisted = JSON.stringify(audits);
   assert.equal(persisted.includes("accountId"), false);
   assert.equal(persisted.includes("rawResponse"), false);
+  assert.equal(persisted.includes("headers"), false);
 });
 
 test("persists an unverified conversion run then still throws parity failure", async () => {
@@ -386,6 +409,23 @@ test("persists an unverified conversion run then still throws parity failure", a
   assert.equal(run.targetCode, TARGET_CODE);
   assert.deepEqual(run.missingIdentities, [selectionIdentity(missing)]);
   assert.deepEqual(run.extraIdentities, []);
+});
+
+test("persists extra identities when the target slip has an additional selection", async () => {
+  const extra = selection(4);
+  const operator = recordingOperator({
+    source: slip(SOURCE_CODE, [selection(1), selection(2), selection(3)]),
+    target: slip(TARGET_CODE, [selection(1), selection(2), selection(3), extra])
+  });
+  const audits = new InMemoryAuditRepository();
+
+  await expectAppError(bookingService(operator, audits).convertBookingCode(SOURCE_CODE));
+
+  const run = audits.conversionRuns[0];
+  assert.ok(run);
+  assert.equal(run.verified, false);
+  assert.deepEqual(run.missingIdentities, []);
+  assert.deepEqual(run.extraIdentities, [selectionIdentity(extra)]);
 });
 
 test("does not persist conversion audits when the source is inactive", async () => {

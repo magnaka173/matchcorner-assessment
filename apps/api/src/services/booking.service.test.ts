@@ -198,6 +198,7 @@ test("persists a canonical decode snapshot after success", async () => {
   assert.equal(persisted.includes("cookie"), false);
   assert.equal(persisted.includes("authorization"), false);
   assert.equal(persisted.includes("rawResponse"), false);
+  assert.equal(persisted.includes("headers"), false);
 });
 
 test("does not persist a snapshot when decode fails", async () => {

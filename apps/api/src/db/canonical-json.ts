@@ -10,6 +10,7 @@ const FORBIDDEN_KEYS = new Set([
   "authorization",
   "cookie",
   "cookies",
+  "headers",
   "rawresponse",
   "set-cookie",
   "cf-ray",

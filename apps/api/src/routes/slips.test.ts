@@ -97,6 +97,13 @@ async function postConvert(body: unknown) {
   return { status: response.status, body: (await response.json()) as Record<string, any> };
 }
 
+test("health reports ok without touching booking operators", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/health`);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, service: "matchcorner-api" });
+});
+
 test("decodes a booking code into a slip and fingerprint", async () => {
   decode = async (bookingCode) => slipFor(bookingCode);
 

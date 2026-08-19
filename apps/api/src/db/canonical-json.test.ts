@@ -19,11 +19,12 @@ test("round-trips a canonical slip and drops undefined keys", () => {
   });
 });
 
-test("refuses to persist accountId, cookies, authorization or rawResponse", () => {
+test("refuses to persist accountId, cookies, authorization, headers or rawResponse", () => {
   for (const payload of [
     { accountId: "sanitized-placeholder-account-id" },
     { cookie: "session=1" },
     { Authorization: "Bearer abc" },
+    { headers: { accept: "application/json" } },
     { rawResponse: { foo: 1 } }
   ]) {
     assert.throws(() => toCanonicalJson(payload), /sensitive field/i);

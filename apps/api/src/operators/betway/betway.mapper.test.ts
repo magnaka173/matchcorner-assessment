@@ -266,6 +266,33 @@ test("maps a multi bet onto BookABet with isSingleBet false", () => {
   assert.equal(request.outcomes.length, 2);
 });
 
+test("BookABet sends operatorMarketId as marketId even when the canonical line differs", () => {
+  const input: EncodeSlipInput = {
+    betType: "single",
+    selections: [
+      {
+        eventId: "73466978",
+        operatorMarketId: "73466978223",
+        selectionId: "73466978223hcp=1.5~1715"
+      }
+    ]
+  };
+
+  const request = mapToBookABetRequest(input, locale);
+  const outcome = request.outcomes[0];
+  assert.ok(outcome);
+
+  assert.deepEqual(outcome, {
+    outcomeId: "73466978223hcp=1.5~1715",
+    eventId: 73466978,
+    marketId: "73466978223",
+    payment: 1,
+    value: 0,
+    selected: true
+  });
+  assert.notEqual(outcome.marketId, "73466978223hcp=1.5~");
+});
+
 test("sends operatorMarketId as BookABet marketId, never the exact canonical line", () => {
   const request = mapToBookABetRequest(
     { betType: "single", selections: [verifiedEncodeSelection] },

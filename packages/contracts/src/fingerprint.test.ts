@@ -66,18 +66,38 @@ test("changed odds do not change the fingerprint", () => {
   );
 });
 
-test("volatile presentation and availability fields do not change the fingerprint", () => {
-  const drifted = selection({
-    eventName: "CON vs. LAS",
-    marketName: "Point Handicap",
-    selectionName: "Sparks -1.5",
-    startTime: "2026-08-19T01:30:00.000Z",
-    odds: 1.62,
-    active: false,
-    operatorMarketId: "999"
-  });
+test("changed event, market or selection names do not change the fingerprint", () => {
+  assert.equal(
+    computeSlipFingerprint([firstSelection]),
+    computeSlipFingerprint([
+      selection({
+        eventName: "CON vs. LAS",
+        marketName: "Point Handicap",
+        selectionName: "Sparks -1.5"
+      })
+    ])
+  );
+});
 
-  assert.equal(computeSlipFingerprint([firstSelection]), computeSlipFingerprint([drifted]));
+test("changed active flag does not change the fingerprint", () => {
+  assert.equal(
+    computeSlipFingerprint([firstSelection]),
+    computeSlipFingerprint([selection({ active: false })])
+  );
+});
+
+test("changed startTime does not change the fingerprint", () => {
+  assert.equal(
+    computeSlipFingerprint([firstSelection]),
+    computeSlipFingerprint([selection({ startTime: "2026-08-19T01:30:00.000Z" })])
+  );
+});
+
+test("changed operatorMarketId does not change the fingerprint", () => {
+  assert.equal(
+    computeSlipFingerprint([firstSelection]),
+    computeSlipFingerprint([selection({ operatorMarketId: "999" })])
+  );
 });
 
 test("changed eventId changes the fingerprint", () => {

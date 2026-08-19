@@ -48,6 +48,24 @@ npm run dev:web
 
 See `apps/mobile/README.md` to run the Flutter Decode viewer.
 
+## Testing
+
+Automated tests mock the Betway operator and PostgreSQL boundaries. They do not call live Betway, depend on current booking codes or odds, or require a running database.
+
+Live Betway verification is intentionally manual.
+
+Fingerprints ignore live odds, names, timestamps and availability flags. They enforce stable `eventId` + canonical `marketId` + `selectionId` identity.
+
+```bash
+npm run typecheck
+npm test
+npm --workspace @matchcorner/web run build
+
+cd apps/mobile
+flutter analyze
+flutter test
+```
+
 ## Security
 
 Do not commit:

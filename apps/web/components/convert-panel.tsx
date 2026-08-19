@@ -3,6 +3,7 @@
 import type { ConvertResult } from "@matchcorner/contracts";
 import { useState } from "react";
 import { convertSlip } from "../lib/api";
+import { isVerifiedConversion } from "../lib/convert-result";
 import { BetslipView } from "./betslip-view";
 import { BookingCodeForm } from "./booking-code-form";
 import { CopyButton } from "./copy-button";
@@ -53,7 +54,7 @@ export function ConvertPanel() {
 
       {error ? <ErrorPanel error={error} /> : null}
 
-      {result?.verified ? (
+      {isVerifiedConversion(result) ? (
         <div className="result-stack">
           <div className="verified-banner" aria-live="polite">
             <StatusBadge tone="success">Verified</StatusBadge>

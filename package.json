@@ -10,6 +10,9 @@
     "dev:api": "npm --workspace @matchcorner/api run dev",
     "dev:web": "npm --workspace @matchcorner/web run dev",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:api": "npm --workspace @matchcorner/api run test",
+    "test:web": "npm --workspace @matchcorner/web run test",
+    "test:contracts": "npm --workspace @matchcorner/contracts run test"
   }
 }
