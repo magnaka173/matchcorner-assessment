@@ -1,5 +1,11 @@
-/**
- * Shared contracts are intentionally introduced in a later feature commit.
- * This placeholder keeps the monorepo package boundary explicit from day one.
- */
-export {};
+export type { BetType, Betslip, DecodedSlip, Operator, Selection } from "./betslip.js";
+
+export type { SelectionIdentityParts } from "./fingerprint.js";
+export {
+  SELECTION_IDENTITY_SEPARATOR,
+  SLIP_IDENTITY_SEPARATOR,
+  computeSlipFingerprint,
+  selectionIdentity,
+  slipIdentityPayload,
+  toDecodedSlip
+} from "./fingerprint.js";
