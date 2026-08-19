@@ -20,7 +20,7 @@ The target product supports:
 apps/
   api/          Node.js + Express + TypeScript API
   web/          Next.js + TypeScript web app
-  mobile/       Flutter app (initialized in a later commit)
+  mobile/       Flutter betslip viewer (Decode only)
 
 packages/
   contracts/    Shared canonical betslip contracts
@@ -46,7 +46,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-The Flutter app is initialized separately in `apps/mobile` in a later commit.
+See `apps/mobile/README.md` to run the Flutter Decode viewer.
 
 ## Security
 

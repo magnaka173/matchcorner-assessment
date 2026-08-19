@@ -32,9 +32,8 @@ Thumbs.db
 .flutter-plugins-dependencies
 .packages
 .pub-cache/
-pubspec.lock
+apps/mobile/.dart_tool/
 apps/mobile/build/
-apps/mobile/.metadata
 
 # local test captures / sensitive raw operator responses
 source.json
