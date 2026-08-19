@@ -45,10 +45,27 @@ function buildSelectionName(outcome: BetwaySelection["outcome"]): string {
   return specialBetValue ? `${base} ${specialBetValue}`.trim() : base;
 }
 
+/**
+ * Tennis draw placeholders such as `R16P11 vs. R16P12` live in displayName.
+ * The actual competitors are homeTeam / awayTeam on the same sportEvent.
+ * Require both sides so a one-sided value is not treated as a complete title.
+ */
+function eventNameFromParticipants(sportEvent: BetwaySelection["sportEvent"]): string | undefined {
+  const home = firstText(sportEvent.homeTeam);
+  const away = firstText(sportEvent.awayTeam);
+  return home && away ? `${home} vs. ${away}` : undefined;
+}
+
 export function mapBetwaySelection(raw: BetwaySelection): Selection {
   return {
     eventId: String(raw.sportEvent.eventId),
-    eventName: firstText(raw.sportEvent.displayName, raw.sportEvent.name, raw.eventName) ?? "",
+    eventName:
+      firstText(
+        eventNameFromParticipants(raw.sportEvent),
+        raw.sportEvent.displayName,
+        raw.sportEvent.name,
+        raw.eventName
+      ) ?? "",
     sport: firstText(raw.sportEvent.sportId, raw.sportId) ?? "",
     region: firstText(raw.sportEvent.region, raw.region),
     league: firstText(raw.sportEvent.league, raw.league),

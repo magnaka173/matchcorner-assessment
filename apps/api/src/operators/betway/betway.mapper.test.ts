@@ -61,6 +61,31 @@ test("maps eventId from sportEvent as a string", () => {
   assert.equal(selection.league, "WNBA");
 });
 
+test("prefers sportEvent homeTeam and awayTeam over placeholder display names", () => {
+  const slip = mapFixture((payload) => {
+    const sportEvent = rawChild(rawSelectionAt(payload, 0), "sportEvent");
+    sportEvent["displayName"] = "R16P11 vs. R16P12";
+    sportEvent["name"] = "R16P11 vs. R16P12";
+    sportEvent["homeTeam"] = "Cirstea, Sorana";
+    sportEvent["awayTeam"] = "Pegula, Jessica";
+    rawSelectionAt(payload, 0)["eventName"] = "R16P11 vs. R16P12";
+  });
+  const mapped = selectionAt(slip, 0);
+
+  assert.equal(mapped.eventName, "Cirstea, Sorana vs. Pegula, Jessica");
+  assert.equal(mapped.eventId, "68096464");
+});
+
+test("falls back to displayName when homeTeam or awayTeam is missing", () => {
+  const slip = mapFixture((payload) => {
+    const sportEvent = rawChild(rawSelectionAt(payload, 0), "sportEvent");
+    sportEvent["homeTeam"] = "Cirstea, Sorana";
+    delete sportEvent["awayTeam"];
+  });
+
+  assert.equal(selectionAt(slip, 0).eventName, "Connecticut Sun vs. Los Angeles Sparks");
+});
+
 test("prefers originalMarket.marketId as the canonical exact market", () => {
   const selection = selectionAt(mapFixture(), 0);
 

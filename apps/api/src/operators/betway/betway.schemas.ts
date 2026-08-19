@@ -46,7 +46,10 @@ const sportEventSchema = z.looseObject({
   expectedStartEpoch: z.number().nullish(),
   sportId: optionalIdentifier,
   region: optionalText,
-  league: optionalText
+  league: optionalText,
+  /** Present on match events; more reliable than placeholder display names. */
+  homeTeam: optionalText,
+  awayTeam: optionalText
 });
 
 export const betwaySelectionSchema = z.looseObject({

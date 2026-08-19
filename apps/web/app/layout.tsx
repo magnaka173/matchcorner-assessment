@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata = {
-  title: "MatchCorner Booking Tools",
-  description: "Betway Nigeria booking-code technical assessment"
+  title: "MatchCorner Booking Workspace",
+  description: "Decode, encode and convert Betway Nigeria booking codes"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
