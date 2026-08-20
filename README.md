@@ -1,60 +1,79 @@
 # MatchCorner Technical Assessment
 
-Small full-stack product for Betway Nigeria booking-code workflows.
+Betway Nigeria booking-code product: **Decode**, **Encode**, and **Convert** with mandatory round-trip verification.
 
-## Assessment scope
+The browser and Flutter client talk only to the MatchCorner API. The API owns the Betway Nigeria adapter, canonical slip mapping, fingerprint/parity checks, and PostgreSQL audit snapshots.
 
-The target product supports:
+## Live Demo
 
-- **Decode** — Betway booking code → normalized betslip
-- **Encode** — selections → new Betway booking code
-- **Convert** — existing booking code → new code for the same bet
-- **Verify** — re-decode the generated code and compare stable selection identities
-- **Web** — browser UI for the booking-code workflows
-- **Mobile** — Flutter betslip viewer
-- **Auditability** — clear Git history, documentation and verification evidence
+- **Web:** https://matchcornerweb-production.up.railway.app
+- **API health:** https://matchcornerapi-production.up.railway.app/api/v1/health
+- **Repository:** https://github.com/magnaka173/matchcorner-assessment
 
-## Repository layout
+A Flutter **release APK** is built locally against the public HTTPS API. It is not hosted from this repository.
+
+## Delivered Capabilities
+
+**Web** (Next.js workspace against the public API):
+
+- Decode a Betway booking code into a canonical `Betslip`
+- Encode canonical selections into a new Betway booking code
+- Convert a source code into a new code
+- Re-decode the target code and treat the conversion as success only when semantic parity verifies
+
+**Flutter** (Android-installable Decode viewer):
+
+- Same public API and canonical domain model as web
+- Decode + betslip viewer only (no Encode/Convert UI)
+- Production builds inject the API origin with `--dart-define=API_BASE_URL=...`
+
+**Backend** (Node.js + Express):
+
+- `BookingOperator` abstraction with a Betway Nigeria adapter
+- Shared `@matchcorner/contracts` canonical types
+- SHA-256 fingerprint and identity-set parity on Convert
+- Prisma/PostgreSQL snapshots of canonical slips and conversion runs
+- Structured `AppError` responses (no raw Betway bodies to clients)
+
+## Quick Architecture
+
+See [docs/architecture.md](docs/architecture.md).
+
+Clients never call Betway. Convert is Decode → Encode → Decode → identity comparison, not “BookABet returned a code”.
+
+## Verification Philosophy
+
+A successful `BookABet` response is **not** considered sufficient.
+
+Convert performs:
 
 ```text
-apps/
-  api/          Node.js + Express + TypeScript API
-  web/          Next.js + TypeScript web app
-  mobile/       Flutter betslip viewer (Decode only)
-
-packages/
-  contracts/    Shared canonical betslip contracts
-
-docs/           Architecture and investigation notes
+source Decode  →  Encode  →  target Decode  →  canonical identity comparison
 ```
 
-## First-commit goal
+Stable selection identity:
 
-This commit intentionally contains only the project skeleton, shared conventions and a health endpoint.
-
-Betway-specific Decode / Encode / Convert logic is added in later commits so the Git history shows the implementation workflow clearly.
-
-## Local setup
-
-1. Copy `.env.example` to `.env`.
-2. Install dependencies.
-3. Start the API and web apps.
-
-```bash
-npm install
-npm run dev:api
-npm run dev:web
+```text
+eventId + ":" + canonical marketId + ":" + selectionId
 ```
 
-See `apps/mobile/README.md` to run the Flutter Decode viewer.
+The slip fingerprint is SHA-256 of those identities, sorted and joined with `|`.
+
+**Ignored (may move between Decode and re-Decode):** odds, names, timestamps, selection order, `active`, `operatorMarketId`.
+
+**Enforced:** `eventId`, canonical exact `marketId`, `selectionId`.
+
+## Local Development
+
+See [docs/runbook.md](docs/runbook.md). Copy [`.env.example`](.env.example) to `.env`, install, build shared contracts, then start the API and web apps.
+
+Flutter Decode viewer: [apps/mobile/README.md](apps/mobile/README.md).
 
 ## Testing
 
-Automated tests mock the Betway operator and PostgreSQL boundaries. They do not call live Betway, depend on current booking codes or odds, or require a running database.
+Automated tests cover contracts, API orchestration, Betway mapping, persistence allowlists, and web/mobile clients. External Betway and PostgreSQL boundaries are mocked. Tests do not call live Betway, depend on current booking codes or odds, or require a running database.
 
-Live Betway verification is intentionally manual.
-
-Fingerprints ignore live odds, names, timestamps and availability flags. They enforce stable `eventId` + canonical `marketId` + `selectionId` identity.
+Live operator and UI checks are manual. See [docs/submission-evidence.md](docs/submission-evidence.md).
 
 ```bash
 npm run typecheck
@@ -66,30 +85,21 @@ flutter analyze
 flutter test
 ```
 
-## CI and Deployment
+GitHub Actions runs the Node gates plus Flutter analyze/test and a debug APK compile. Latest green `develop` run: [CI #32339121028](https://github.com/magnaka173/matchcorner-assessment/actions/runs/32339121028).
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on pull requests and on pushes to `main` and `develop`. Node jobs typecheck, test, and build the web app with mocked operator/database boundaries. Flutter jobs analyze, test, and compile a debug APK against a dummy API origin (`https://api.example.invalid`) — compile verification only.
+## Deployment
 
-API and web deploy as **separate Railway services** from this repository root (npm workspaces). Point each service’s config-as-code file at `/apps/api/railway.toml` or `/apps/web/railway.toml`, and leave the Root Directory empty so the lockfile and `packages/contracts` resolve.
-
-Railway Postgres supplies `DATABASE_URL`. `npm ci` / Railpack install runs `prisma generate` via the API `postinstall` script. Production schema updates use `prisma migrate deploy` (never `prisma migrate dev`). The API healthcheck is `GET /api/v1/health` and does not call Betway.
-
-Required production variables:
-
-- API: `DATABASE_URL`, `PORT` (Railway-provided), `BETWAY_BASE_URL`, `BETWAY_BRAND_ID`, `BETWAY_COUNTRY_CODE`, `BETWAY_CULTURE_CODE`. Optional: `HOST` (default `0.0.0.0`), `CORS_ORIGIN`, `BETWAY_TIMEOUT_MS`.
-- Web: `NEXT_PUBLIC_API_BASE_URL` (public HTTPS API origin; inlined at build time). Railway provides `PORT`.
-
-A distributable Flutter APK should use `--dart-define=API_BASE_URL=<public HTTPS API origin>`.
+- **Railway Web** and **Railway API** are separate services from this repository root (npm workspaces). Config-as-code: [`apps/api/railway.toml`](apps/api/railway.toml), [`apps/web/railway.toml`](apps/web/railway.toml). Leave the Railway Root Directory empty.
+- **Railway Postgres** supplies `DATABASE_URL`. Production schema updates use `prisma migrate deploy` (never `prisma migrate dev`).
+- API healthcheck: `GET /api/v1/health` (does not call Betway or query Postgres).
+- Flutter release builds use the public HTTPS API origin, not localhost.
 
 ## Security
 
-Do not commit:
+Betway traffic stays server-side. Clients do not receive operator cookies or session data. Canonical DTOs allowlist consumed fields. Audit persistence stores canonical snapshots only and refuses account/session/raw-upstream keys. Secrets live in environment variables; `.env` is not committed. Automated tests use sanitized fixtures.
 
-- browser cookies
-- authorization/session tokens
-- raw account identifiers
-- copied browser cURL captures
-- `.env`
-- raw operator-response fixtures containing private data
+Do not commit cookies, tokens, account identifiers, copied browser captures, or raw operator payloads that contain private data.
 
-Use sanitized fixtures only.
+## Submission Evidence
+
+Reviewer checklist, git history, and remaining manual attachments: [docs/submission-evidence.md](docs/submission-evidence.md).

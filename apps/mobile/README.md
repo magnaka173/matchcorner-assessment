@@ -69,7 +69,16 @@ flutter build apk --debug \
 
 The debug APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 
-A shipped APK should pass the public HTTPS MatchCorner API origin, not localhost.
+A shipped APK should pass the public HTTPS MatchCorner API origin, not localhost:
+
+```bash
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://matchcornerapi-production.up.railway.app
+```
+
+Output: `build/app/outputs/flutter-apk/app-release.apk` (from `apps/mobile`; gitignored).
+
+No APK is published from this GitHub repository. An IPA/TestFlight build is not delivered.
 
 ## iOS
 
@@ -90,6 +99,6 @@ Implemented:
 
 Not in this commit:
 
-- Encode / Convert
+- Encode / Convert (web-only in this assessment)
 - Authentication
 - Firebase App Distribution

@@ -1,13 +1,20 @@
-# MatchCorner Technical Assessment — Betway Nigeria Booking-Code Integration
+# Betway Nigeria booking-code integration
 
-**Progress documentation — 18 August 2026**  
-**Status:** Operator integration discovery complete; application implementation in progress.
+Reconnaissance notes for the public Betway Nigeria booking-code HTTP contracts. Product architecture, runbook, and submission evidence:
 
-## Current milestone
+- [architecture.md](architecture.md)
+- [runbook.md](runbook.md)
+- [submission-evidence.md](submission-evidence.md)
 
-Decode, Encode and Convert have been validated against Betway Nigeria. A newly generated booking code was decoded with full selection parity and loaded successfully in Betway's own UI.
+**Investigation date:** 18 August 2026
 
-**Verified generated code:** `BW69DC9F6B`
+**Status:** Operator contracts documented and implemented in this repository.
+
+During reconnaissance, Decode, Encode and Convert were validated against Betway Nigeria. A newly generated booking code was decoded with full selection parity and loaded successfully in Betway's own UI.
+
+**Reconnaissance generated code:** `BW69DC9F6B`
+
+That code is a historical sports slip. It is locked into fingerprint tests; it may no longer decode against live Betway. Use a current booking code for production demos.
 
 ## Scope
 
@@ -78,6 +85,19 @@ Success:
 { "bookingCode": "BW..." }
 ```
 
+BookABet outcome mapping from the canonical encode input:
+
+| BookABet field | Canonical source |
+| --- | --- |
+| `outcomeId` | `selectionId` |
+| `eventId` | numeric `eventId` |
+| `marketId` | `operatorMarketId` (parent/display market, **not** exact `marketId`) |
+| `payment` | `1` |
+| `value` | `0` |
+| `selected` | `true` |
+
+`operatorMarketId` is intentionally different from canonical `marketId`. Identity uses the exact line (`originalMarket.marketId` when present). Encode must send the parent market Betway's write API accepts.
+
 ## Clean conversion proof
 
 | Event | Selection | Event ID | Exact market | Outcome ID |
@@ -134,60 +154,26 @@ A successful `BookABet` response alone is not sufficient. The generated code mus
 - Use environment variables for operator configuration.
 - Apply timeouts and normalize upstream errors.
 
-## Recommended Git commit boundaries
+## Git history
 
-```text
-docs: capture Betway booking-code reconnaissance
-chore: bootstrap full-stack monorepo
-feat(core): define canonical betslip contract
-feat(api): decode Betway booking codes
-docs: verify Betway booking-code creation contract
-feat(api): encode selections into Betway booking codes
-feat(api): convert slips with parity verification
-feat(db): persist slip snapshots and conversion audits
-feat(web): add decode encode convert workspace
-feat(mobile): add Flutter betslip viewer
-test: add booking-code contract and parity coverage
-ci: add quality gates and production deployment config
-docs: add architecture runbook and submission evidence
-```
-
-Only create each commit after the corresponding work is actually complete.
+The repository followed this feature sequence. Exact hashes and messages: [submission-evidence.md](submission-evidence.md).
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  W[Web / Next.js] --> A[Node.js API]
-  M[Flutter App] --> A
-  A --> S[Booking Service]
-  S --> O[BookingOperator Interface]
-  O --> B[Betway Nigeria Adapter]
-  B --> D[FindBookABet]
-  B --> E[BookABet]
-  S --> P[(PostgreSQL Audit)]
-  S --> V[Parity / Fingerprint Verifier]
-```
+Canonical diagrams: [architecture.md](architecture.md). Web and Flutter call only the MatchCorner API; Betway stays server-side.
 
-## Remaining work
+## Remaining work from this note
 
-- Implement the discovered contracts in the backend adapter.
-- Implement Convert with mandatory parity verification.
-- Add validation, timeout/error normalization and automated tests.
-- Persist sanitized audit records in PostgreSQL.
-- Build web Decode / Encode / Convert UI.
-- Build Flutter slip viewer and APK.
-- Deploy and validate production URLs.
-- Complete final architecture/runbook documentation and 5-minute walkthrough.
+The application, tests, CI, Railway deployments, and architecture/runbook are in the repository. Visual attachments (device screenshot, current Betway UI capture, walkthrough recording) are listed in [submission-evidence.md](submission-evidence.md) and are not stored in git.
 
-## Current evidence checklist
+## Reconnaissance evidence checklist
 
-- [x] Generated Betway code: `BW69DC9F6B`
+- [x] Generated Betway code: `BW69DC9F6B` (18 August 2026; may expire)
 - [x] API re-decode: 4/4 selections
 - [x] Stable identity parity
-- [x] Betway UI verification
-- [ ] GitHub repository finalized
-- [ ] Live web URL
-- [ ] Flutter APK/distribution
-- [ ] Final architecture/runbook
-- [ ] 5-minute screen recording
+- [x] Betway UI verification (reconnaissance)
+- [x] GitHub repository: https://github.com/magnaka173/matchcorner-assessment
+- [x] Live web: https://matchcornerweb-production.up.railway.app
+- [x] Live API health: https://matchcornerapi-production.up.railway.app/api/v1/health
+- [x] Architecture / runbook / submission docs in `docs/`
+- [ ] External screenshots / 5-minute recording (not in this repository)
