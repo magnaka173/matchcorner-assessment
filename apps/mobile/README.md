@@ -69,6 +69,8 @@ flutter build apk --debug \
 
 The debug APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 
+A shipped APK should pass the public HTTPS MatchCorner API origin, not localhost.
+
 ## iOS
 
 The same Dart code supports iOS, and this repository includes the generated

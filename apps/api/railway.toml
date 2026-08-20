@@ -1,0 +1,26 @@
+# Railway service: MatchCorner API
+#
+# Dashboard: leave Root Directory empty (repository root) so npm workspaces
+# resolve. Set Config-as-code path to /apps/api/railway.toml.
+#
+# Railpack installs dependencies from the repo root, then runs buildCommand.
+# Do not set Root Directory to apps/api — the lockfile and contracts package
+# live at the repository root.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "npm --workspace @matchcorner/api run prisma:generate && npm --workspace @matchcorner/api run build"
+watchPatterns = [
+  "apps/api/**",
+  "packages/contracts/**",
+  "package.json",
+  "package-lock.json"
+]
+
+[deploy]
+preDeployCommand = ["npm --workspace @matchcorner/api run prisma:deploy"]
+startCommand = "npm --workspace @matchcorner/api run start"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

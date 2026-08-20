@@ -66,6 +66,21 @@ flutter analyze
 flutter test
 ```
 
+## CI and Deployment
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on pull requests and on pushes to `main` and `develop`. Node jobs typecheck, test, and build the web app with mocked operator/database boundaries. Flutter jobs analyze, test, and compile a debug APK against a dummy API origin (`https://api.example.invalid`) — compile verification only.
+
+API and web deploy as **separate Railway services** from this repository root (npm workspaces). Point each service’s config-as-code file at `/apps/api/railway.toml` or `/apps/web/railway.toml`, and leave the Root Directory empty so the lockfile and `packages/contracts` resolve.
+
+Railway Postgres supplies `DATABASE_URL`. `npm ci` / Railpack install runs `prisma generate` via the API `postinstall` script. Production schema updates use `prisma migrate deploy` (never `prisma migrate dev`). The API healthcheck is `GET /api/v1/health` and does not call Betway.
+
+Required production variables:
+
+- API: `DATABASE_URL`, `PORT` (Railway-provided), `BETWAY_BASE_URL`, `BETWAY_BRAND_ID`, `BETWAY_COUNTRY_CODE`, `BETWAY_CULTURE_CODE`. Optional: `HOST` (default `0.0.0.0`), `CORS_ORIGIN`, `BETWAY_TIMEOUT_MS`.
+- Web: `NEXT_PUBLIC_API_BASE_URL` (public HTTPS API origin; inlined at build time). Railway provides `PORT`.
+
+A distributable Flutter APK should use `--dart-define=API_BASE_URL=<public HTTPS API origin>`.
+
 ## Security
 
 Do not commit:

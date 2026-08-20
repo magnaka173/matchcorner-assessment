@@ -1,5 +1,6 @@
 import cors from "cors";
 import express, { type Express } from "express";
+import { createCorsOptions } from "./middleware/cors-origin.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { healthRouter } from "./routes/health.js";
 import { createSlipsRouter } from "./routes/slips.js";
@@ -17,7 +18,7 @@ export function createApp({ bookingService }: AppDependencies): Express {
   const app = express();
 
   app.disable("x-powered-by");
-  app.use(cors());
+  app.use(cors(createCorsOptions(process.env.CORS_ORIGIN)));
   app.use(express.json({ limit: "256kb" }));
 
   app.use("/api/v1/health", healthRouter);

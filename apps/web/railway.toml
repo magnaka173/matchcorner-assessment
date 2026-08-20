@@ -1,0 +1,22 @@
+# Railway service: MatchCorner web
+#
+# Dashboard: leave Root Directory empty (repository root) so npm workspaces
+# resolve. Set Config-as-code path to /apps/web/railway.toml.
+#
+# NEXT_PUBLIC_API_BASE_URL is inlined at next build. Set it on this service
+# before the first production build. Do not bake localhost into production.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "npm --workspace @matchcorner/web run build"
+watchPatterns = [
+  "apps/web/**",
+  "packages/contracts/**",
+  "package.json",
+  "package-lock.json"
+]
+
+[deploy]
+startCommand = "npm --workspace @matchcorner/web run start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

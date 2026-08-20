@@ -6,6 +6,9 @@
     "apps/web",
     "packages/contracts"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev:api": "npm --workspace @matchcorner/api run dev",
     "dev:web": "npm --workspace @matchcorner/web run dev",

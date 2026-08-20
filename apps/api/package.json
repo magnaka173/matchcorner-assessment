@@ -6,14 +6,16 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "postinstall": "prisma generate",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test $(find src -name '*.test.ts' | sort)",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@matchcorner/contracts": "*",
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "6.19.3",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "express": "^5.0.0",
@@ -23,7 +25,7 @@
     "@types/cors": "^2.8.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
-    "prisma": "^6.19.3",
+    "prisma": "6.19.3",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }
