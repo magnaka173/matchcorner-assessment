@@ -8,7 +8,7 @@
 
 [build]
 builder = "RAILPACK"
-buildCommand = "npm --workspace @matchcorner/web run build"
+buildCommand = "npm --workspace @matchcorner/contracts run build && npm --workspace @matchcorner/web run build"
 watchPatterns = [
   "apps/web/**",
   "packages/contracts/**",

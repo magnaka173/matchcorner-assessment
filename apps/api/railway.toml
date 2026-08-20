@@ -9,7 +9,7 @@
 
 [build]
 builder = "RAILPACK"
-buildCommand = "npm --workspace @matchcorner/api run prisma:generate && npm --workspace @matchcorner/api run build"
+buildCommand = "npm --workspace @matchcorner/contracts run build && npm --workspace @matchcorner/api run prisma:generate && npm --workspace @matchcorner/api run build"
 watchPatterns = [
   "apps/api/**",
   "packages/contracts/**",

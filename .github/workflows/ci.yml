@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build contracts
+        run: npm --workspace @matchcorner/contracts run build
+
       - name: Generate Prisma client
         run: npm --workspace @matchcorner/api run prisma:generate
         env:
